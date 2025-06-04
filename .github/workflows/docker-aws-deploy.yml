@@ -1,0 +1,72 @@
+name: Docker AWS Deployment (Reusable)
+
+# This is a reusable workflow for Docker builds and AWS deployments
+on:
+  workflow_call:
+    inputs:
+      AWS_ROLE_TO_ASSUME:
+        description: 'AWS role to assume for OIDC'
+        required: true
+        type: string
+      AWS_REGION:
+        description: 'AWS region'
+        required: true
+        type: string
+      ECR_URL:
+        description: 'ECR URL'
+        required: true
+        type: string
+      ECR_REPOSITORY:
+        description: 'ECR repository name'
+        required: true
+        type: string
+      ECS_CLUSTER_NAME:
+        description: 'ECS cluster name'
+        required: true
+        type: string
+      ECS_SERVICE_NAME:
+        description: 'ECS service name'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    environment:
+      name: ${{ github.ref == 'refs/heads/master' && 'production' || github.ref == 'refs/heads/testing' && 'testing' || 'development' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.AWS_REGION }}
+          role-session-name: ${{ github.event.repository.name }}-ci
+          
+      - name: Create .env file
+        run: |
+          echo "APP_VERSION=1.1.${{ github.run_number }}" >> .env
+          
+      - name: Build Docker image
+        run: docker build --build-arg uid=1000 -t app:latest .
+        
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Tag Docker image
+        run: |
+          docker tag app:latest ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:latest
+          docker tag app:latest ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:${{ github.run_number }}
+          
+      - name: Push Docker image
+        run: |
+          docker push ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:latest
+          docker push ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:${{ github.run_number }}
+          
+      - name: Update ECS service
+        run: |
+          aws ecs update-service --cluster ${{ inputs.ECS_CLUSTER_NAME }} --service ${{ inputs.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.WEBIKE_AWS_REGION }}

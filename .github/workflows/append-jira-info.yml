@@ -1,0 +1,113 @@
+name: Auto-append Jira info to PR description
+
+# This is a reusable workflow that can be called from other repositories
+on:
+  workflow_call:
+    secrets:
+      JIRA_BASE_URL:
+        required: true
+      JIRA_EMAIL:
+        required: true
+      JIRA_API_TOKEN:
+        required: true
+      GH_TOKEN:
+        required: true
+
+jobs:
+  update-pr-description:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Extract Jira issue key from branch name
+        id: extract
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          if [[ "$BRANCH_NAME" =~ ([A-Z]+-[0-9]+) ]]; then
+            echo "key=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "No Jira issue key found in branch name."
+            exit 1
+          fi
+
+      - name: Fetch Jira issue details
+        id: fetch
+        run: |
+          JIRA_URL="${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${{ steps.extract.outputs.key }}"
+          RESPONSE=$(curl -s -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+            -H "Accept: application/json" "$JIRA_URL")
+
+          SUMMARY=$(echo "$RESPONSE" | jq -r '.fields.summary // "No summary found."')
+          
+          # Handle complex Jira description format (Atlassian Document Format)
+          DESCRIPTION=$(echo "$RESPONSE" | jq -r '.fields.description.content[0].content[0].text // "No description."')
+
+          # Check for parent issue
+          PARENT_KEY=$(echo "$RESPONSE" | jq -r '.fields.parent.key // ""')
+          
+          if [ -n "$PARENT_KEY" ]; then
+            PARENT_URL="${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/$PARENT_KEY"
+            PARENT_RESPONSE=$(curl -s -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+              -H "Accept: application/json" "$PARENT_URL")
+
+            PARENT_SUMMARY=$(echo "$PARENT_RESPONSE" | jq -r '.fields.summary // "No summary found."')
+            PARENT_DESCRIPTION=$(echo "$PARENT_RESPONSE" | jq -r '.fields.description.content[0].content[0].text // "No description."')
+
+            echo "parent_key=$PARENT_KEY" >> $GITHUB_OUTPUT
+            echo "parent_summary=$PARENT_SUMMARY" >> $GITHUB_OUTPUT
+            echo "parent_description=$PARENT_DESCRIPTION" >> $GITHUB_OUTPUT
+          fi
+
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "key=${{ steps.extract.outputs.key }}" >> $GITHUB_OUTPUT
+
+      - name: Append Jira info to PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            const existingBody = pr.body || "";
+
+            const jiraKey = '${{ steps.fetch.outputs.key }}';
+            const summary = process.env.SUMMARY;
+            const description = process.env.DESCRIPTION;
+            const jiraUrl = process.env.JIRA_URL;
+
+            const parentKey = process.env.PARENT_KEY;
+            const parentSummary = process.env.PARENT_SUMMARY;
+            const parentDescription = process.env.PARENT_DESCRIPTION;
+
+            const jiraSectionMarker = `### 🧩 Jira Ticket: [${jiraKey}](${jiraUrl}/browse/${jiraKey})`;
+
+            // Avoid adding if already present
+            if (!existingBody.includes(jiraSectionMarker)) {
+              let jiraSection = `\n\n---\n\n${jiraSectionMarker}\n**Summary**: ${summary}\n\n**Description**:\n${description}`;
+
+              // Add parent issue details if available
+              if (parentKey) {
+                const parentSectionMarker = `### 🔗 Parent Ticket: [${parentKey}](${jiraUrl}/browse/${parentKey})`;
+                jiraSection += `\n\n${parentSectionMarker}\n**Summary**: ${parentSummary}\n\n**Description**:\n${parentDescription}`;
+              }
+
+              const updatedBody = existingBody + jiraSection;
+
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                body: updatedBody
+              });
+              
+              console.log(`Updated PR #${prNumber} with Jira ticket info: ${jiraKey}`);
+            } else {
+              console.log(`PR #${prNumber} already contains Jira ticket info: ${jiraKey}`);
+            }
+        env:
+          SUMMARY: ${{ steps.fetch.outputs.summary }}
+          DESCRIPTION: ${{ steps.fetch.outputs.description }}
+          PARENT_KEY: ${{ steps.fetch.outputs.parent_key }}
+          PARENT_SUMMARY: ${{ steps.fetch.outputs.parent_summary }}
+          PARENT_DESCRIPTION: ${{ steps.fetch.outputs.parent_description }}
+          JIRA_URL: ${{ secrets.JIRA_BASE_URL }}

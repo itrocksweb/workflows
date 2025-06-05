@@ -14,7 +14,7 @@ on:
         required: true
 
 jobs:
-  update-pr-description:
+  append-jira-info:
     runs-on: ubuntu-latest
     
     steps:

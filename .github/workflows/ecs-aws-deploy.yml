@@ -1,4 +1,8 @@
-name: Docker AWS Deployment (Reusable)
+name: ECS AWS Deployment
+
+permissions:
+  id-token: write
+  contents: read
 
 # This is a reusable workflow for Docker builds and AWS deployments
 on:
@@ -28,11 +32,17 @@ on:
         description: 'ECS service name'
         required: true
         type: string
+      DOPPLER_PROJECT:
+        description: 'Doppler project'
+        required: false
+        type: string
+      DOPPLER_CONFIG:
+        description: 'Doppler config'
+        required: false
+        type: string
 
 jobs:
   deploy:
-    environment:
-      name: ${{ github.ref == 'refs/heads/master' && 'production' || github.ref == 'refs/heads/testing' && 'testing' || 'development' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +57,17 @@ jobs:
           aws-region: ${{ inputs.AWS_REGION }}
           role-session-name: ${{ github.event.repository.name }}-ci
           
-      - name: Create .env file
+      - name: Install Doppler CLI
+        if: inputs.DOPPLER_CONFIG != '' && inputs.DOPPLER_PROJECT != ''
+        uses: dopplerhq/cli-action@v2
+      - name: Download secrets from Doppler
+        if: inputs.DOPPLER_CONFIG != '' && inputs.DOPPLER_PROJECT != ''
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_CONFIG: ${{ inputs.DOPPLER_CONFIG }}
+          DOPPLER_PROJECT: ${{ inputs.DOPPLER_PROJECT }}
+        run: doppler secrets download --no-file --format env > .env
+      - name: Add version to .env file
         run: |
           echo "APP_VERSION=1.1.${{ github.run_number }}" >> .env
           
@@ -69,4 +89,4 @@ jobs:
           
       - name: Update ECS service
         run: |
-          aws ecs update-service --cluster ${{ inputs.ECS_CLUSTER_NAME }} --service ${{ inputs.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.WEBIKE_AWS_REGION }}
+          aws ecs update-service --cluster ${{ inputs.ECS_CLUSTER_NAME }} --service ${{ inputs.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.AWS_REGION }}

@@ -5,13 +5,11 @@ on:
   workflow_call:
     secrets:
       JIRA_BASE_URL:
-        required: true
+        required: false
       JIRA_EMAIL:
-        required: true
+        required: false
       JIRA_API_TOKEN:
-        required: true
-      GH_TOKEN:
-        required: true
+        required: false
 
 jobs:
   append-jira-info:

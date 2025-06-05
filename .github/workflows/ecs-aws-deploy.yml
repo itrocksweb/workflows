@@ -20,33 +20,13 @@ on:
         description: 'AWS region'
         required: true
         type: string
-      ECR_URL:
-        description: 'ECR URL'
+      ENVIRONMENT:
+        description: 'Environment'
         required: true
-        type: string
-      ECR_REPOSITORY:
-        description: 'ECR repository name'
-        required: true
-        type: string
-      ECS_CLUSTER_NAME:
-        description: 'ECS cluster name'
-        required: true
-        type: string
-      ECS_SERVICE_NAME:
-        description: 'ECS service name'
-        required: true
-        type: string
-      DOPPLER_PROJECT:
-        description: 'Doppler project'
-        required: false
-        type: string
-      DOPPLER_CONFIG:
-        description: 'Doppler config'
-        required: false
         type: string
 
 jobs:
-  deploy:
+  aws-ecs-deploy:
     environment:
       name: ${{ inputs.ENVIRONMENT }}
     runs-on: ubuntu-latest
@@ -64,14 +44,14 @@ jobs:
           role-session-name: ${{ github.event.repository.name }}-ci
           
       - name: Install Doppler CLI
-        if: inputs.DOPPLER_CONFIG != '' && inputs.DOPPLER_PROJECT != ''
+        if: vars.DOPPLER_CONFIG != '' && vars.DOPPLER_PROJECT != ''
         uses: dopplerhq/cli-action@v2
       - name: Download secrets from Doppler
-        if: inputs.DOPPLER_CONFIG != '' && inputs.DOPPLER_PROJECT != ''
+        if: vars.DOPPLER_CONFIG != '' && vars.DOPPLER_PROJECT != ''
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          DOPPLER_CONFIG: ${{ inputs.DOPPLER_CONFIG }}
-          DOPPLER_PROJECT: ${{ inputs.DOPPLER_PROJECT }}
+          DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
         run: doppler secrets download --no-file --format env > .env
       - name: Add version to .env file
         run: |
@@ -85,14 +65,14 @@ jobs:
         
       - name: Tag Docker image
         run: |
-          docker tag app:latest ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:latest
-          docker tag app:latest ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:${{ github.run_number }}
+          docker tag app:latest ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:latest
+          docker tag app:latest ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:${{ github.run_number }}
           
       - name: Push Docker image
         run: |
-          docker push ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:latest
-          docker push ${{ inputs.ECR_URL }}/${{ inputs.ECR_REPOSITORY }}:${{ github.run_number }}
+          docker push ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:latest
+          docker push ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:${{ github.run_number }}
           
       - name: Update ECS service
         run: |
-          aws ecs update-service --cluster ${{ inputs.ECS_CLUSTER_NAME }} --service ${{ inputs.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.AWS_REGION }}
+          aws ecs update-service --cluster ${{ vars.ECS_CLUSTER_NAME }} --service ${{ vars.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.AWS_REGION }}

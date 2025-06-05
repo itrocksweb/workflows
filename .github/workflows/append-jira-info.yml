@@ -3,7 +3,7 @@ name: Auto-append Jira info to PR description
 # This is a reusable workflow that can be called from other repositories
 on:
   workflow_call:
-    secrets:
+    inputs:
       JIRA_BASE_URL:
         required: false
       JIRA_EMAIL:

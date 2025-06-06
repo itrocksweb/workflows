@@ -16,6 +16,10 @@ on:
         description: 'AWS region'
         required: true
         type: string
+    secrets:
+      DOPPLER_TOKEN:
+        description: 'Doppler token'
+        required: false
 
 jobs:
   aws-ecs-deploy:

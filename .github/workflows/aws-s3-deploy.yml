@@ -1,0 +1,70 @@
+name: AWS S3 Deployment
+
+# This is a reusable workflow for Docker builds and AWS deployments
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      AWS_ROLE_TO_ASSUME:
+        description: 'AWS role to assume for OIDC'
+        required: true
+        type: string
+      AWS_REGION:
+        description: 'AWS region'
+        required: true
+        type: string
+      SOURCE_PATH:
+        description: 'Source folder to deploy'
+        required: true
+        type: string
+      NODE_VERSION:
+        description: 'Node.js version'
+        required: true
+        type: string
+      BUILD_COMMAND:
+        description: 'Build command'
+        required: false
+        default: 'npm run build'
+        type: string
+    secrets:
+      DOPPLER_TOKEN:
+        required: true
+
+jobs:
+  aws-s3-deploy:
+    environment:
+      name: ${{ inputs.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.AWS_REGION }}
+          role-session-name: ${{ github.event.repository.name }}-ci
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v2
+      - name: Download secrets from Doppler
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+        run: doppler secrets download --no-file --format env > .env
+      - name: Install dependencies
+        run: npm install
+      - name: Build app
+        run: ${{ inputs.BUILD_COMMAND }}
+      - name: Deploy to S3
+        run: |
+          aws s3 sync ${{ inputs.SOURCE_PATH }}/ s3://${{ vars.S3_BUCKET }} --delete
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ vars.DISTRIBUTION_ID }} --paths '/*'

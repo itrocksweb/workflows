@@ -16,10 +16,6 @@ on:
         description: 'AWS region'
         required: true
         type: string
-      ENVIRONMENT:
-        description: 'Environment'
-        required: true
-        type: string
 
 jobs:
   aws-ecs-deploy:

@@ -24,6 +24,11 @@ on:
         description: 'Node.js version'
         required: true
         type: string
+      DEPENDENCY_INSTALL_COMMAND:
+        description: 'Dependency install command'
+        required: false
+        default: 'npm install'
+        type: string
       BUILD_COMMAND:
         description: 'Build command'
         required: false
@@ -59,7 +64,7 @@ jobs:
           DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
         run: doppler secrets download --no-file --format env > .env
       - name: Install dependencies
-        run: npm install
+        run: ${{ inputs.DEPENDENCY_INSTALL_COMMAND }}
       - name: Build app
         run: ${{ inputs.BUILD_COMMAND }}
       - name: Deploy to S3

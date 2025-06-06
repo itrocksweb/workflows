@@ -1,9 +1,5 @@
 name: ECS AWS Deployment
 
-permissions:
-  id-token: write
-  contents: read
-
 # This is a reusable workflow for Docker builds and AWS deployments
 on:
   workflow_call:

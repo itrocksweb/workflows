@@ -21,7 +21,7 @@ on:
         required: true
 
 jobs:
-  validate-doppler-envs:
+  doppler-variables-validation:
     environment:
       name: ${{ inputs.ENVIRONMENT }}
     runs-on: ubuntu-latest

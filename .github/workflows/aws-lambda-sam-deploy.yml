@@ -27,7 +27,7 @@ on:
       BUILD_COMMAND:
         description: 'Build command'
         required: false
-        default: 'npm run build'
+        default: 'sam build'
         type: string
     
 jobs:

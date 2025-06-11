@@ -1,0 +1,55 @@
+name: Validate Doppler variables in the target environment
+
+# This is a reusable workflow that can be called from other repositories
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      AWS_ROLE_TO_ASSUME:
+        description: 'AWS role to assume for OIDC'
+        required: true
+        type: string
+      AWS_REGION:
+        description: 'AWS region'
+        required: true
+        type: string
+    secrets:
+      DOPPLER_TOKEN:
+        required: true
+
+jobs:
+  validate-doppler-envs:
+    environment:
+      name: ${{ inputs.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
+      - name: Validate Doppler env variables
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+          DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
+        run: |
+          set -e
+          echo "Fetching env vars for config: local"
+          doppler secrets download --project "$DOPPLER_PROJECT" --config local --no-file --format json > local.json
+          echo "Fetching env vars for config: $DOPPLER_CONFIG"
+          doppler secrets download --project "$DOPPLER_PROJECT" --config "$DOPPLER_CONFIG" --no-file --format json > target.json
+
+          # Find keys in local but missing in target
+          MISSING_IN_TARGET=$(jq -r 'keys_unsorted[]' local.json | sort)
+          TARGET_KEYS=$(jq -r 'keys_unsorted[]' target.json | sort)
+          MISSING=$(comm -23 <(echo "$MISSING_IN_TARGET") <(echo "$TARGET_KEYS"))
+          if [ -n "$MISSING" ]; then
+            echo "::error::The following env vars are present in 'local' but missing in '$DOPPLER_CONFIG':"
+            echo "$MISSING"
+            exit 1
+          fi

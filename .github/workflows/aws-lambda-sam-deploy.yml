@@ -1,0 +1,69 @@
+name: AWS S3 Deployment
+
+# This is a reusable workflow for Docker builds and AWS deployments
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      AWS_ROLE_TO_ASSUME:
+        description: 'AWS role to assume for OIDC'
+        required: true
+        type: string
+      AWS_REGION:
+        description: 'AWS region'
+        required: true
+        type: string
+      SOURCE_PATH:
+        description: 'Source folder to deploy'
+        required: true
+        type: string
+      NODE_VERSION:
+        description: 'Node.js version'
+        required: true
+        type: string
+      BUILD_COMMAND:
+        description: 'Build command'
+        required: false
+        default: 'npm run build'
+        type: string
+    
+jobs:
+  aws-lambda-sam-deploy:
+    environment:
+      name: ${{ inputs.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    # Set environment based on branch
+    environment: ${{ github.ref == 'refs/heads/master' && 'production' || github.ref == 'refs/heads/testing' && 'testing' || github.ref == 'refs/heads/development' && 'development' || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build with SAM
+        run: ${{ inputs.BUILD_COMMAND }}
+
+      - name: Zip Lambda Package
+        run: |
+          cd ${{ inputs.SOURCE_PATH }}
+          zip -r build.zip .
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.AWS_REGION }}
+          role-session-name: ${{ github.event.repository.name }}-ci
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ vars.FUNCTION_NAME }} \
+            --zip-file fileb://${{ inputs.SOURCE_PATH }}/build.zip

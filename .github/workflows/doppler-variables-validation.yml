@@ -8,14 +8,6 @@ on:
         description: 'Environment'
         required: true
         type: string
-      AWS_ROLE_TO_ASSUME:
-        description: 'AWS role to assume for OIDC'
-        required: true
-        type: string
-      AWS_REGION:
-        description: 'AWS region'
-        required: true
-        type: string
     secrets:
       DOPPLER_TOKEN:
         required: true

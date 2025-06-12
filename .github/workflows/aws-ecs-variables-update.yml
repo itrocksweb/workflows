@@ -1,4 +1,4 @@
-name: ECS AWS Deployment
+name: ECS AWS Variables Update
 
 # This is a reusable workflow for Docker builds and AWS deployments
 on:
@@ -18,12 +18,11 @@ on:
         type: string
     
 jobs:
-  aws-ecs-deploy:
+  aws-ecs-variables-update:
     environment:
       name: ${{ inputs.ENVIRONMENT }}
     runs-on: ubuntu-latest
     steps:
-      steps:
       - name: Checkout code
         uses: actions/checkout@v4
 

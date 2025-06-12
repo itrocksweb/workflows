@@ -1,0 +1,144 @@
+name: ECS AWS Deployment
+
+# This is a reusable workflow for Docker builds and AWS deployments
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      AWS_ROLE_TO_ASSUME:
+        description: 'AWS role to assume for OIDC'
+        required: true
+        type: string
+      AWS_REGION:
+        description: 'AWS region'
+        required: true
+        type: string
+    
+jobs:
+  aws-ecs-deploy:
+    environment:
+      name: ${{ inputs.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    steps:
+      steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.AWS_REGION }}
+          role-session-name: validate-doppler-envs
+
+      - name: Get ECS task definition ARN
+        id: get-taskdef-arn
+        env:
+          AWS_REGION: ${{ inputs.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER_NAME }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE_NAME }}
+        run: |
+          set -e
+          TASK_DEF_ARN=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          echo "Current task definition ARN: $TASK_DEF_ARN"
+          echo "taskdef_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Get ECS task definition secrets
+        id: get-taskdef-secrets
+        env:
+          AWS_REGION: ${{ inputs.AWS_REGION }}
+          TASK_DEF_ARN: ${{ steps.get-taskdef-arn.outputs.taskdef_arn }}
+        run: |
+          set -e
+          aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --output json > taskdef.json
+          jq -r '.taskDefinition.containerDefinitions[0].secrets' taskdef.json > aws_secrets.json
+
+      - name: Compare Doppler and AWS secrets
+        id: compare-secrets
+        env:
+          AWS_REGION: ${{ inputs.AWS_REGION }}
+        run: |
+          set -e
+          # Exclude DOPPLER_CONFIG, DOPPLER_ENVIRONMENT, DOPPLER_PROJECT from Doppler keys
+          EXCLUDE_KEYS='["DOPPLER_CONFIG","DOPPLER_ENVIRONMENT","DOPPLER_PROJECT"]'
+          DOPPLER_KEYS=$(jq -r --argjson exclude "$EXCLUDE_KEYS" '
+            to_entries[]
+            | select(IN(.key ; $exclude[]) | not)
+            | select(.value != null and .value != "")
+            | .key
+          ' target.json | sort)
+          AWS_SECRET_KEYS=$(jq -r --argjson exclude "$EXCLUDE_KEYS" '
+            .[]
+            | select((.name | IN($exclude[])) | not)
+            | .name
+          ' aws_secrets.json | sort)
+          MISSING_IN_AWS=$(comm -23 <(echo "$DOPPLER_KEYS") <(echo "$AWS_SECRET_KEYS"))
+          EXTRA_IN_AWS=$(comm -13 <(echo "$DOPPLER_KEYS") <(echo "$AWS_SECRET_KEYS"))
+
+          if [ -n "$MISSING_IN_AWS" ]; then
+            echo "::warning::Some Doppler env vars are missing in the AWS task definition secrets:"
+            echo "$MISSING_IN_AWS"
+          fi
+          if [ -n "$EXTRA_IN_AWS" ]; then
+            echo "::warning::Some AWS secrets are not present in Doppler config (will be removed):"
+            echo "$EXTRA_IN_AWS"
+          fi
+          NEEDS_UPDATE=false
+          if [ -n "$MISSING_IN_AWS" ] || [ -n "$EXTRA_IN_AWS" ]; then
+            NEEDS_UPDATE=true
+          fi
+          echo "needs_update=$NEEDS_UPDATE" >> $GITHUB_OUTPUT
+
+      - name: Update ECS secrets in task definition if needed
+        if: steps.compare-secrets.outputs.needs_update == 'true'
+        id: create-new-task-def
+        env:
+          AWS_REGION: ${{ inputs.AWS_REGION }}
+          SSM_PREFIX: ${{ vars.SSM_PREFIX }}
+          SSM_ENV: ${{ vars.SSM_ENV }}
+        run: |
+          set -e
+          # Build new secrets array: only Doppler keys, with valueFrom logic using SSM_PREFIX and SSM_ENV
+          : "${SSM_PREFIX:?SSM_PREFIX must be set (e.g., arn:aws:ssm:us-east-1:359686209453:parameter/api)}"
+          : "${SSM_ENV:?SSM_ENV must be set (e.g., prod)}"
+          DOPPLER_JSON=$(cat target.json)
+          jq -n --argjson doppler "$DOPPLER_JSON" --arg prefix "$SSM_PREFIX" --arg env "$SSM_ENV" '
+          [$doppler | to_entries[]
+          | select(.value != null and .value != "")
+          | {name: .key, valueFrom: ($prefix + "/" + $env + "/" + .key)}]
+          ' > new_secrets.json
+          # Update the first (and only) container definition secrets section
+          jq --slurpfile newsecrets new_secrets.json '
+          .taskDefinition.containerDefinitions[0].secrets = $newsecrets[0] | .taskDefinition
+          ' taskdef.json > new_taskdef.json
+          # Prepare register-task-definition input
+          # If .taskDefinition exists, use it; else use root
+          if jq -e '.taskDefinition' new_taskdef.json >/dev/null; then
+            jq '.taskDefinition | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredAt, .registeredBy, .compatibilities, .requiresCompatibilities, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn)' new_taskdef.json > register_input.json
+          else
+            jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredAt, .registeredBy, .compatibilities, .requiresCompatibilities, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn, .taskDefinitionArn)' new_taskdef.json > register_input.json
+          fi
+          CHANGE_SUMMARY="Missing: $MISSING_IN_AWS; Extra: $EXTRA_IN_AWS"
+          # Register new revision
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://register_input.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "::notice::Registered new task definition revision: $NEW_TASK_DEF_ARN (change summary: $CHANGE_SUMMARY)"
+          echo "new_taskdef_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update ECS service with new task definition (if needed)
+        if: steps.compare-secrets.outputs.needs_update == 'true'
+        env:
+          AWS_REGION: ${{ inputs.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER_NAME }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE_NAME }}
+          NEW_TASK_DEF_ARN: ${{ steps.create-new-task-def.outputs.new_taskdef_arn }}
+        run: |
+          set -e
+          echo "Updating ECS service $ECS_SERVICE to use $NEW_TASK_DEF_ARN"
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "$NEW_TASK_DEF_ARN"
+          echo "::notice::ECS service updated to new task definition."

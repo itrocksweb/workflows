@@ -16,6 +16,11 @@ on:
         description: 'AWS region'
         required: true
         type: string
+      DOPPLER_DOWNLOAD_SECRETS:
+        description: 'Download Doppler secrets'
+        required: false
+        default: false  
+        type: boolean
     secrets:
       DOPPLER_TOKEN:
         description: 'Doppler token'
@@ -40,10 +45,10 @@ jobs:
           role-session-name: ${{ github.event.repository.name }}-ci
           
       - name: Install Doppler CLI
-        if: vars.DOPPLER_CONFIG != '' && vars.DOPPLER_PROJECT != ''
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
         uses: dopplerhq/cli-action@v2
       - name: Download secrets from Doppler
-        if: vars.DOPPLER_CONFIG != '' && vars.DOPPLER_PROJECT != ''
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}

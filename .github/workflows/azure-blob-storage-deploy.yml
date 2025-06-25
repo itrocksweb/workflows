@@ -1,0 +1,104 @@
+name: Azure Blob Storage Deploy
+
+# This is a reusable workflow for Azure Blob Storage deployments
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      SOURCE_PATH:
+        description: 'Source folder to deploy'
+        required: true
+        type: string
+      NODE_VERSION:
+        description: 'Node.js version'
+        required: true
+        type: string
+      DEPENDENCY_INSTALL_COMMAND:
+        description: 'Dependency install command'
+        required: false
+        default: 'npm install'
+        type: string
+      BUILD_COMMAND:
+        description: 'Build command'
+        required: false
+        default: 'npm run build'
+        type: string
+      DOPPLER_DOWNLOAD_SECRETS:
+        description: 'Download Doppler secrets'
+        required: false
+        default: false  
+        type: boolean
+    secrets:
+      AZURE_STORAGE_SAS_TOKEN:
+        description: 'Azure Storage SAS token with write permissions'
+        required: true
+      DOPPLER_TOKEN:
+        required: false
+
+jobs:
+  azure-blob-storage-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.ENVIRONMENT }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install Doppler CLI
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        uses: dopplerhq/cli-action@v2
+      
+      - name: Download secrets from Doppler
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+        run: doppler secrets download --no-file --format env > .env
+      
+      - name: Install dependencies
+        run: ${{ inputs.DEPENDENCY_INSTALL_COMMAND }}
+      
+      - name: Configure environment
+        run: |
+          if [ -f "src/environments/environment.${{ inputs.ENVIRONMENT }}.ts" ]; then
+            mv src/environments/environment.${{ inputs.ENVIRONMENT }}.ts src/environments/environment.prod.ts
+          fi
+      
+      - name: Build application
+        run: ${{ inputs.BUILD_COMMAND }}
+      
+      - name: Install Azure CLI
+        uses: azure/CLI@v1
+        with:
+          azcliversion: 2.45.0
+      
+      - name: Deploy to Azure Blob Storage
+        env:
+          AZURE_STORAGE_BLOB_URL: ${{ vars.AZURE_STORAGE_BLOB_URL }}
+          AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
+        run: |
+          # Upload files using azcopy which works well with SAS tokens
+          # Install azcopy if not already installed
+          if ! command -v azcopy &> /dev/null; then
+            echo "Installing azcopy..."
+            wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux
+            tar -xf azcopy.tar.gz
+            sudo cp ./azcopy_linux_amd64_*/azcopy /usr/bin/
+            sudo chmod +x /usr/bin/azcopy
+            rm -rf azcopy_linux_amd64_* azcopy.tar.gz
+          fi
+          
+          # Construct destination URL with SAS token
+          DESTINATION_URL="${AZURE_STORAGE_BLOB_URL}/${{ vars.AZURE_STORAGE_CONTAINER }}${AZURE_STORAGE_SAS_TOKEN}"
+          
+          # Upload files
+          azcopy copy "${{ inputs.SOURCE_PATH }}/*" "${DESTINATION_URL}" --recursive=true

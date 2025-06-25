@@ -75,12 +75,7 @@ jobs:
       
       - name: Build application
         run: ${{ inputs.BUILD_COMMAND }}
-      
-      - name: Install Azure CLI
-        uses: azure/CLI@v1
-        with:
-          azcliversion: 2.45.0
-      
+   
       - name: Deploy to Azure Blob Storage
         env:
           AZURE_STORAGE_BLOB_URL: ${{ vars.AZURE_STORAGE_BLOB_URL }}

@@ -81,7 +81,6 @@ jobs:
           AZURE_STORAGE_BLOB_URL: ${{ vars.AZURE_STORAGE_BLOB_URL }}
           AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
         run: |
-          # Upload files using azcopy which works well with SAS tokens
           # Install azcopy if not already installed
           if ! command -v azcopy &> /dev/null; then
             echo "Installing azcopy..."

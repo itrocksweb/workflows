@@ -43,6 +43,15 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.DOTNET_VERSION }}
+          cache: true
+      
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
       
       - name: Install Doppler CLI
         if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
@@ -56,10 +65,20 @@ jobs:
           DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
         run: doppler secrets download --no-file --format env > .env
       
+      - name: Cache dotnet build output
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/obj
+            **/bin
+          key: ${{ runner.os }}-dotnet-build-${{ inputs.BUILD_CONFIGURATION }}-${{ hashFiles('**/*.cs', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet-build-${{ inputs.BUILD_CONFIGURATION }}-
+
       - name: Build with dotnet
         run: dotnet build ${{ vars.PROJECT_PATH }} --configuration ${{ inputs.BUILD_CONFIGURATION }}
 
-      - name: dotnet publish
+      - name: Publish with dotnet
         run: dotnet publish ${{ vars.PROJECT_PATH }} -c ${{ inputs.BUILD_CONFIGURATION }} -o "${{env.DOTNET_ROOT}}/myapp"
 
       - name: Deploy to Azure Web App

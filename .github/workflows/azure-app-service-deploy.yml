@@ -1,0 +1,72 @@
+name: Azure Web App Deploy
+
+# This is a reusable workflow for Azure Web App deployments
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      DOTNET_VERSION:
+        description: '.NET version'
+        required: true
+        type: string
+      BUILD_CONFIGURATION:
+        description: 'Build configuration'
+        required: false
+        default: 'Release'
+        type: string
+      DOPPLER_DOWNLOAD_SECRETS:
+        description: 'Download Doppler secrets'
+        required: false
+        default: false  
+        type: boolean
+    secrets:
+      AZURE_PUBLISH_PROFILE:
+        description: 'Azure Web App publish profile'
+        required: true
+      DOPPLER_TOKEN:
+        required: false
+
+jobs:
+  azure-web-app-deploy:
+    runs-on: windows-latest
+    environment: ${{ inputs.ENVIRONMENT }}
+    permissions:
+      contents: read
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.DOTNET_VERSION }}
+      
+      - name: Install Doppler CLI
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        uses: dopplerhq/cli-action@v2
+      
+      - name: Download secrets from Doppler
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+        run: doppler secrets download --no-file --format env > .env
+      
+      - name: Build with dotnet
+        run: dotnet build ${{ vars.PROJECT_PATH }} --configuration ${{ inputs.BUILD_CONFIGURATION }}
+
+      - name: dotnet publish
+        run: dotnet publish ${{ vars.PROJECT_PATH }} -c ${{ inputs.BUILD_CONFIGURATION }} -o "${{env.DOTNET_ROOT}}/myapp"
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_APP_NAME }}
+          slot-name: ${{ vars.AZURE_SLOT_NAME }}
+          package: ${{env.DOTNET_ROOT}}/myapp
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}

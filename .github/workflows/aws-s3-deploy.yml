@@ -36,7 +36,7 @@ on:
         type: string
     secrets:
       DOPPLER_TOKEN:
-        required: true
+        required: false
 
 jobs:
   aws-s3-deploy:
@@ -57,8 +57,10 @@ jobs:
           aws-region: ${{ inputs.AWS_REGION }}
           role-session-name: ${{ github.event.repository.name }}-ci
       - name: Install Doppler CLI
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
         uses: dopplerhq/cli-action@v2
       - name: Download secrets from Doppler
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}

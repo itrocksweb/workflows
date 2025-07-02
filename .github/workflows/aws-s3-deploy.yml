@@ -66,6 +66,11 @@ jobs:
         run: doppler secrets download --no-file --format env > .env
       - name: Install dependencies
         run: ${{ inputs.DEPENDENCY_INSTALL_COMMAND }}
+      - name: Configure environment (if needed)
+        run: |
+          if [ -f "src/environments/environment.${{ inputs.ENVIRONMENT }}.ts" ]; then
+            mv src/environments/environment.${{ inputs.ENVIRONMENT }}.ts src/environments/environment.prod.ts
+          fi
       - name: Build app
         run: ${{ inputs.BUILD_COMMAND }}
       - name: Deploy to S3

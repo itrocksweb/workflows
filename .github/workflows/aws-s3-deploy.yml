@@ -34,6 +34,11 @@ on:
         required: false
         default: 'npm run build'
         type: string
+      DOPPLER_DOWNLOAD_SECRETS:
+        description: 'Download Doppler secrets'
+        required: false
+        default: true  
+        type: boolean
     secrets:
       DOPPLER_TOKEN:
         required: false

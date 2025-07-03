@@ -21,6 +21,11 @@ on:
         required: false
         default: false  
         type: boolean
+      VERSION_VARIABLE_NAME:
+        description: 'Version variable name'
+        required: false
+        default: 'APP_VERSION'
+        type: string
     secrets:
       DOPPLER_TOKEN:
         description: 'Doppler token'
@@ -56,7 +61,7 @@ jobs:
         run: doppler secrets download --no-file --format env > .env
       - name: Add version to .env file
         run: |
-          echo "APP_VERSION=1.1.${{ github.run_number }}" >> .env
+          echo "${{ inputs.VERSION_VARIABLE_NAME }}=1.1.${{ github.run_number }}" >> .env
           
       - name: Build Docker image
         run: docker build --build-arg uid=1000 -t app:latest .

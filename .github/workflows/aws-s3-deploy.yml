@@ -39,6 +39,11 @@ on:
         required: false
         default: true  
         type: boolean
+      MOVE_ANGULAR_ENV_FILE:
+        description: 'Move Angular environment file'
+        required: false
+        default: false  
+        type: boolean
     secrets:
       DOPPLER_TOKEN:
         required: false
@@ -74,6 +79,7 @@ jobs:
       - name: Install dependencies
         run: ${{ inputs.DEPENDENCY_INSTALL_COMMAND }}
       - name: Configure environment (if needed)
+        if: ${{ inputs.MOVE_ANGULAR_ENV_FILE }}
         run: |
           if [ -f "src/environments/environment.${{ inputs.ENVIRONMENT }}.ts" ]; then
             mv src/environments/environment.${{ inputs.ENVIRONMENT }}.ts src/environments/environment.prod.ts

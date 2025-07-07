@@ -26,6 +26,10 @@ on:
         required: false
         default: 'APP_VERSION'
         type: string
+      DOCKER_BUILD_ARGS:
+        description: 'Docker build arguments (format: VAR=value)'
+        required: false
+        type: string
     secrets:
       DOPPLER_TOKEN:
         description: 'Doppler token'
@@ -64,7 +68,26 @@ jobs:
           echo "${{ inputs.VERSION_VARIABLE_NAME }}=1.1.${{ github.run_number }}" >> .env
           
       - name: Build Docker image
-        run: docker build --build-arg uid=1000 -t app:latest .
+        run: |
+          # Start with base build command
+          BUILD_CMD="docker build --build-arg uid=1000"
+          
+          # Add build arguments if provided
+          if [ -n "${{ inputs.DOCKER_BUILD_ARGS }}" ]; then
+            while IFS= read -r line; do
+              # Skip empty lines
+              if [ -n "$line" ]; then
+                BUILD_CMD="$BUILD_CMD --build-arg $line"
+              fi
+            done <<< "${{ inputs.DOCKER_BUILD_ARGS }}"
+          fi
+          
+          # Complete the build command
+          BUILD_CMD="$BUILD_CMD -t app:latest ."
+          
+          # Execute the build command
+          echo "Executing: $BUILD_CMD"
+          eval $BUILD_CMD
         
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2

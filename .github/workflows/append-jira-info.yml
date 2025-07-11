@@ -18,8 +18,22 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Check if PR is from Dependabot
+        id: check_dependabot
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          PR_ACTOR="${{ github.actor }}"
+          
+          if [[ "$BRANCH_NAME" == dependabot/* ]] || [[ "$PR_ACTOR" == "dependabot[bot]" ]]; then
+            echo "is_dependabot=true" >> $GITHUB_OUTPUT
+            echo "This is a Dependabot PR, skipping Jira info extraction."
+          else
+            echo "is_dependabot=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Extract Jira issue key from branch name
         id: extract
+        if: steps.check_dependabot.outputs.is_dependabot != 'true'
         run: |
           BRANCH_NAME="${{ github.head_ref }}"
           if [[ "$BRANCH_NAME" =~ ([A-Z]+-[0-9]+) ]]; then
@@ -31,6 +45,7 @@ jobs:
 
       - name: Fetch Jira issue details
         id: fetch
+        if: steps.check_dependabot.outputs.is_dependabot != 'true'
         run: |
           JIRA_URL="${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${{ steps.extract.outputs.key }}"
           RESPONSE=$(curl -s -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
@@ -63,6 +78,7 @@ jobs:
 
       - name: Append Jira info to PR
         uses: actions/github-script@v7
+        if: steps.check_dependabot.outputs.is_dependabot != 'true'
         with:
           github-token: ${{ secrets.GH_TOKEN }}
           script: |

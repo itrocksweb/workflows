@@ -1,0 +1,120 @@
+name: Android Signed Build
+
+# This is a reusable workflow for Docker builds and AWS deployments
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+    secrets:
+      SIGNING_KEY_ALIAS:
+        description: 'Signing key alias'
+        required: true
+      SIGNING_KEY_PASSWORD:
+        description: 'Signing key password'
+        required: true
+      SIGNING_STORE_PASSWORD:
+        description: 'Signing store password'
+        required: true
+      KEYSTORE_BASE64:
+        description: 'Keystore base64'
+        required: true
+
+jobs:
+  android-build:
+    environment:
+      name: ${{ inputs.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+        
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Decode Keystore
+        run: |
+          mkdir -p keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore/release.keystore
+
+      - name: Clean build
+        run: ./gradlew clean --no-daemon
+        
+      - name: Generate Safe Args
+        run: ./gradlew ${{ vars.GENERATE_SAFE_ARGS_TASK }} --no-daemon
+
+      - name: Build Signed APK & AAB
+        env:
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        run: |
+          ./gradlew ${{ vars.APK_BUILD_TASK }} ${{ vars.AAB_BUILD_TASK }} \
+            -Pandroid.injected.signing.store.file=$(pwd)/keystore/release.keystore \
+            -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$SIGNING_KEY_PASSWORD \
+            --stacktrace --info
+
+      - name: Prepare artifacts
+        id: prepare-artifacts
+        run: |
+          mkdir -p artifacts-output
+          
+          # Find and copy APK and AAB
+          APK_PATH=$(find app/build/outputs/apk/${{ vars.APK_FLAVOUR }}/release -name '*.apk' | head -n 1)
+          AAB_PATH=$(find app/build/outputs/bundle/${{ vars.APK_FLAVOUR }}Release -name '*.aab' | head -n 1)
+              
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::No se encontró ningún APK generado"
+            exit 1
+          fi
+          
+          cp "$APK_PATH" artifacts-output/
+          APK_FILENAME=$(basename "$APK_PATH")
+          echo "apk_path=artifacts-output/$APK_FILENAME" >> $GITHUB_OUTPUT
+          echo "apk_name=$APK_FILENAME" >> $GITHUB_OUTPUT
+          echo "APK generado: $APK_FILENAME"
+          
+          # Copy AAB
+          if [ -z "$AAB_PATH" ]; then
+            echo "::error::No se encontró ningún AAB generado"
+            exit 1
+          fi
+          cp "$AAB_PATH" artifacts-output/
+          AAB_FILENAME=$(basename "$AAB_PATH")
+          echo "aab_path=artifacts-output/$AAB_FILENAME" >> $GITHUB_OUTPUT
+          echo "aab_name=$AAB_FILENAME" >> $GITHUB_OUTPUT
+          echo "AAB generado: $AAB_FILENAME"
+          
+          ls -la artifacts-output/
+      
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.APK_NAME }}-Release-${{ github.run_number }}
+          path: ${{ steps.prepare-artifacts.outputs.apk_path }}
+          retention-days: 90
+        if-no-files-found: error  
+        
+      - name: Upload AAB as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.APK_NAME }}-Release-Bundle-${{ github.run_number }}
+          path: ${{ steps.prepare-artifacts.outputs.aab_path }}
+          retention-days: 90
+        if-no-files-found: error

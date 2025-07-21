@@ -55,7 +55,7 @@ jobs:
         run: ./gradlew clean --no-daemon
         
       - name: Generate Safe Args
-        run: ./gradlew ${{ vars.GENERATE_SAFE_ARGS_TASK }} --no-daemon
+        run: ./gradlew generateSafeArgs${{ fromJSON(format('"{}{}"', upper(substring(vars.APK_FLAVOUR, 0, 1)), substring(vars.APK_FLAVOUR, 1))) }}Release --no-daemon
 
       - name: Build Signed APK & AAB
         env:
@@ -63,7 +63,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         run: |
-          ./gradlew ${{ vars.APK_BUILD_TASK }} ${{ vars.AAB_BUILD_TASK }} \
+          ./gradlew assemble${{ fromJSON(format('"{}{}"', upper(substring(vars.APK_FLAVOUR, 0, 1)), substring(vars.APK_FLAVOUR, 1))) }}Release bundle${{ fromJSON(format('"{}{}"', upper(substring(vars.APK_FLAVOUR, 0, 1)), substring(vars.APK_FLAVOUR, 1))) }}Release \
             -Pandroid.injected.signing.store.file=$(pwd)/keystore/release.keystore \
             -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS \

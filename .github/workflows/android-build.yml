@@ -109,7 +109,7 @@ jobs:
           name: ${{ vars.APK_NAME }}-Release-${{ github.run_number }}
           path: ${{ steps.prepare-artifacts.outputs.apk_path }}
           retention-days: 90
-        if-no-files-found: error  
+          if-no-files-found: error  
         
       - name: Upload AAB as artifact
         uses: actions/upload-artifact@v4
@@ -117,4 +117,4 @@ jobs:
           name: ${{ vars.APK_NAME }}-Release-Bundle-${{ github.run_number }}
           path: ${{ steps.prepare-artifacts.outputs.aab_path }}
           retention-days: 90
-        if-no-files-found: error
+          if-no-files-found: error

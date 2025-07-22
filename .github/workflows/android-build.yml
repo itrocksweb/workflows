@@ -131,11 +131,16 @@ jobs:
         id: s3-upload
         run: |
           APK_FILENAME=$(basename "${{ steps.prepare-artifacts.outputs.apk_path }}")
-          S3_PATH="s3://${{ vars.ITROCK_AWS_APKS_BUCKET_NAME }}/${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/${{ vars.APK_FILENAME }}"
           
-          aws s3 cp ${{ steps.prepare-artifacts.outputs.apk_path }} $S3_PATH
+          # Replace '(' with '-' and remove ')'
+          SAFE_FILENAME=${APK_FILENAME//\(/-}
+          SAFE_FILENAME=${SAFE_FILENAME//\)/}
           
-          PRESIGNED_URL=$(aws s3 presign $S3_PATH --expires-in 604800)
+          S3_PATH="s3://${{ vars.ITROCK_AWS_APKS_BUCKET_NAME }}/${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/$SAFE_FILENAME"
+          
+          aws s3 cp "${{ steps.prepare-artifacts.outputs.apk_path }}" "$S3_PATH"
+          
+          PRESIGNED_URL=$(aws s3 presign "$S3_PATH" --expires-in 604800)
           echo "download_url=$PRESIGNED_URL" >> $GITHUB_OUTPUT
           echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
 

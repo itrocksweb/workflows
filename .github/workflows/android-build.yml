@@ -117,8 +117,85 @@ jobs:
           name: ${{ vars.APK_NAME }}-${{ inputs.ENVIRONMENT }}-Release-${{ github.run_number }}
           path: ${{ steps.prepare-artifacts.outputs.apk_path }}
           retention-days: 90
-          if-no-files-found: error  
-        
+          if-no-files-found: error
+          
+      - name: Configure AWS credentials for QA distribution with OIDC
+        if: ${{ inputs.ENVIRONMENT != 'production' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ITROCK_AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.ITROCK_AWS_REGION }}
+
+      - name: Upload APK to S3
+        if: ${{ inputs.ENVIRONMENT != 'production' }}
+        id: s3-upload
+        run: |
+          APK_FILENAME=$(basename "${{ steps.prepare-artifacts.outputs.apk_path }}")
+          S3_PATH="s3://${{ vars.ITROCK_AWS_APKS_BUCKET_NAME }}/${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/${{ vars.APK_FILENAME }}"
+          
+          aws s3 cp ${{ steps.prepare-artifacts.outputs.apk_path }} $S3_PATH
+          
+          PRESIGNED_URL=$(aws s3 presign $S3_PATH --expires-in 604800)
+          echo "download_url=$PRESIGNED_URL" >> $GITHUB_OUTPUT
+          echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
+
+      - name: Send APK Link to Slack
+        if: ${{ inputs.ENVIRONMENT != 'production' && steps.s3-upload.outcome == 'success' }}
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "Nueva versión de ${{ vars.APK_NAME }} ${{ inputs.ENVIRONMENT }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Nueva versión de ${{ vars.APK_NAME }} ${{ inputs.ENVIRONMENT }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*App:*\n${{ vars.APK_NAME }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Ambiente:*\n${{ inputs.ENVIRONMENT }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Build:*\n#${{ github.run_number }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*APK:*\n${{ steps.s3-upload.outputs.apk_filename }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Descargar APK",
+                        "emoji": true
+                      },
+                      "url": "${{ steps.s3-upload.outputs.download_url }}",
+                      "style": "primary"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ITROCK_APKS_SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
       - name: Upload AAB as artifact
         uses: actions/upload-artifact@v4
         with:

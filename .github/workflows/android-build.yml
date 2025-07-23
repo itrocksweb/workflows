@@ -120,14 +120,12 @@ jobs:
           if-no-files-found: error
           
       - name: Configure AWS credentials for QA distribution with OIDC
-        if: ${{ inputs.ENVIRONMENT != 'production' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.ITROCK_AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.ITROCK_AWS_REGION }}
 
       - name: Upload APK to S3
-        if: ${{ inputs.ENVIRONMENT != 'production' }}
         id: s3-upload
         run: |
           APK_FILENAME=$(basename "${{ steps.prepare-artifacts.outputs.apk_path }}")
@@ -145,7 +143,7 @@ jobs:
           echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
 
       - name: Send APK Link to Slack
-        if: ${{ inputs.ENVIRONMENT != 'production' && steps.s3-upload.outcome == 'success' }}
+        if: ${{ steps.s3-upload.outcome == 'success' }}
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |

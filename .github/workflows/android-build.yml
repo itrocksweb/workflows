@@ -36,9 +36,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
-      
+          
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
+        
+      - name: Setup Build Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            .gradle/build-cache
+            app/build/intermediates
+          key: ${{ runner.os }}-gradle-build-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-build-
         
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -138,8 +148,10 @@ jobs:
           
           aws s3 cp "${{ steps.prepare-artifacts.outputs.apk_path }}" "$S3_PATH"
           
-          PRESIGNED_URL=$(aws s3 presign "$S3_PATH" --expires-in 604800)
-          echo "download_url=$PRESIGNED_URL" >> $GITHUB_OUTPUT
+          # Construct CloudFront URL instead of generating presigned URL
+          CLOUDFRONT_PATH="${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/$SAFE_FILENAME"
+          DOWNLOAD_URL="${{ vars.ITROCK_APKS_DISTRIBUTION_URL }}/$CLOUDFRONT_PATH"
+          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
 
       - name: Send APK Link to Slack
@@ -176,6 +188,10 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "*APK:*\n${{ steps.s3-upload.outputs.apk_filename }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Url:*\n${{ steps.s3-upload.outputs.download_url }}"
                     }
                   ]
                 },

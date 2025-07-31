@@ -65,7 +65,7 @@ jobs:
         run: doppler secrets download --no-file --format env > .env
       - name: Add version to .env file
         run: |
-          echo "${{ inputs.VERSION_VARIABLE_NAME }}=1.1.${{ github.run_number }}" >> .env
+          echo "${{ inputs.VERSION_VARIABLE_NAME }}=${{ github.run_number }}" >> .env
           
       - name: Login to Amazon ECR
         id: ecr-login

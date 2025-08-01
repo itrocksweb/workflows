@@ -143,6 +143,9 @@ jobs:
           # Replace '(' with '-' and remove ')'
           SAFE_FILENAME=${APK_FILENAME//\(/-}
           SAFE_FILENAME=${SAFE_FILENAME//\)/}
+
+          # URL-encode '+' to '%2B'
+          SAFE_FILENAME=${SAFE_FILENAME//+/%2B} 
           
           S3_PATH="s3://${{ vars.ITROCK_AWS_APKS_BUCKET_NAME }}/${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/$SAFE_FILENAME"
           

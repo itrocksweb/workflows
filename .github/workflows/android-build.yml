@@ -144,9 +144,6 @@ jobs:
           SAFE_FILENAME=${APK_FILENAME//\(/-}
           SAFE_FILENAME=${SAFE_FILENAME//\)/}
 
-          # URL-encode '+' to '%2B'
-          SAFE_FILENAME=${SAFE_FILENAME//+/%2B} 
-          
           S3_PATH="s3://${{ vars.ITROCK_AWS_APKS_BUCKET_NAME }}/${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/$SAFE_FILENAME"
           
           aws s3 cp "${{ steps.prepare-artifacts.outputs.apk_path }}" "$S3_PATH"
@@ -154,6 +151,10 @@ jobs:
           # Construct CloudFront URL instead of generating presigned URL
           CLOUDFRONT_PATH="${{ vars.APK_NAME }}/${{ inputs.ENVIRONMENT }}/$SAFE_FILENAME"
           DOWNLOAD_URL="${{ vars.ITROCK_APKS_DISTRIBUTION_URL }}/$CLOUDFRONT_PATH"
+
+          # URL-encode '+' to '%2B'
+          DOWNLOAD_URL=${DOWNLOAD_URL//+/%2B}
+
           echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
 

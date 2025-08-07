@@ -22,6 +22,11 @@ on:
         required: false
         default: false  
         type: boolean
+      VERSION_VARIABLE_NAME:
+        description: 'Version variable name'
+        required: false
+        default: 'APP_VERSION'
+        type: string
     secrets:
       AZURE_PUBLISH_PROFILE:
         description: 'Azure Web App publish profile'
@@ -55,6 +60,10 @@ jobs:
           DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
           DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
         run: doppler secrets download --no-file --format env > .env
+
+      - name: Add version to .env file
+        run: |
+          echo "${{ inputs.VERSION_VARIABLE_NAME }}=${{ github.run_number }}" >> .env
 
       - name: Build with dotnet
         run: dotnet build ${{ vars.PROJECT_PATH }} --configuration ${{ inputs.BUILD_CONFIGURATION }}

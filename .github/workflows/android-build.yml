@@ -8,6 +8,10 @@ on:
         description: 'Environment'
         required: true
         type: string
+      PROJECT_PATH:
+        description: 'Project path'
+        required: false
+        type: string
     secrets:
       SIGNING_KEY_ALIAS:
         description: 'Signing key alias'
@@ -40,7 +44,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
         
-      # - name: Setup Build Cache
+      
+      - name: Change directory to project path
+        if: inputs.PROJECT_PATH != ''
+        run: cd ${{ inputs.PROJECT_PATH }}
+        # - name: Setup Build Cache
       #   uses: actions/cache@v3
       #   with:
       #     path: |

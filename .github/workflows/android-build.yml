@@ -12,6 +12,21 @@ on:
         description: 'Project path'
         required: false
         type: string
+      GOOGLE_PLAY_DEPLOY:
+        description: 'Upload AAB to Google Play Store'
+        required: false
+        default: false
+        type: boolean
+      GOOGLE_PLAY_TRACK:
+        description: 'Google Play track (internal, alpha, beta, production)'
+        required: false
+        default: 'internal'
+        type: string
+      GOOGLE_PLAY_RELEASE_STATUS:
+        description: 'Release status (completed, inProgress, draft, halted)'
+        required: false
+        default: 'completed'
+        type: string
     secrets:
       SIGNING_KEY_ALIAS:
         description: 'Signing key alias'
@@ -25,6 +40,9 @@ on:
       KEYSTORE_BASE64:
         description: 'Keystore base64'
         required: true
+      GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:
+        description: 'Google Play service account JSON (plain text)'
+        required: false
 
 jobs:
   android-build:
@@ -234,3 +252,14 @@ jobs:
           path: ${{ steps.prepare-artifacts.outputs.aab_path }}
           retention-days: 90
           if-no-files-found: error
+
+      - name: Upload AAB to Google Play
+        if: ${{ inputs.GOOGLE_PLAY_DEPLOY }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ vars.ANDROID_PACKAGE_NAME }}
+          releaseFiles: ${{ steps.prepare-artifacts.outputs.aab_path }}
+          track: ${{ inputs.GOOGLE_PLAY_TRACK }}
+          status: ${{ inputs.GOOGLE_PLAY_RELEASE_STATUS }}
+          changesNotSentForReview: true

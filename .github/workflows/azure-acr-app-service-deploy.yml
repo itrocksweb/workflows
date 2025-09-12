@@ -1,0 +1,110 @@
+name: Azure App Service Container Deploy
+
+# Reusable workflow for building/pushing image to ACR and updating Azure App Service (container)
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        description: 'Environment'
+        required: true
+        type: string
+      DOPPLER_DOWNLOAD_SECRETS:
+        description: 'Download Doppler secrets'
+        required: false
+        default: false
+        type: boolean
+      VERSION_VARIABLE_NAME:
+        description: 'Version variable name to append to .env'
+        required: false
+        default: 'APP_VERSION'
+        type: string
+      DOCKER_BUILD_ARGS:
+        description: 'Docker build arguments (format: VAR=value per line)'
+        required: false
+        type: string
+    secrets:
+      AZURE_PUBLISH_PROFILE:
+        description: 'Azure Web App publish profile (xml)'
+        required: true
+      ACR_USERNAME:
+        description: 'Azure Container Registry username (admin user)'
+        required: true
+      ACR_PASSWORD:
+        description: 'Azure Container Registry password'
+        required: true
+      DOPPLER_TOKEN:
+        description: 'Doppler token'
+        required: false
+
+jobs:
+  azure-acr-appservice-deploy:
+    environment:
+      name: ${{ inputs.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Doppler CLI
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        uses: dopplerhq/cli-action@v2
+
+      - name: Download secrets from Doppler
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+        run: doppler secrets download --no-file --format env > .env
+
+      - name: Add version to .env file
+        run: echo "${{ inputs.VERSION_VARIABLE_NAME }}=${{ github.run_number }}" >> .env
+
+      - name: Docker login to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.ACR_URL }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set up Docker build args
+        id: build-args
+        run: |
+          # Initialize build args with default
+          ARGS="uid=1000"
+          # Add any custom build arguments provided
+          if [ -n "${{ inputs.DOCKER_BUILD_ARGS }}" ]; then
+            while IFS= read -r line; do
+              if [ -n "$line" ]; then
+                ARGS="$ARGS,$line"
+              fi
+            done <<< "${{ inputs.DOCKER_BUILD_ARGS }}"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image (ACR)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:latest
+            ${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:${{ github.run_number }}
+          build-args: |
+            ${{ steps.build-args.outputs.args }}
+          cache-from: |
+            type=registry,ref=${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:buildcache
+            type=gha,scope=${{ github.workflow }}
+          cache-to: |
+            type=registry,ref=${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:buildcache,mode=max
+            type=gha,scope=${{ github.workflow }},mode=max
+
+      # - name: Update Azure Web App (container image)
+      #   uses: azure/webapps-deploy@v3
+      #   with:
+      #     app-name: ${{ vars.AZURE_APP_NAME }}
+      #     slot-name: ${{ vars.AZURE_SLOT_NAME }}
+      #     publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+      #     images: ${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:${{ github.run_number }}

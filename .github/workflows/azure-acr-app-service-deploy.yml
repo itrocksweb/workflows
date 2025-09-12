@@ -25,7 +25,7 @@ on:
     secrets:
       AZURE_PUBLISH_PROFILE:
         description: 'Azure Web App publish profile (xml)'
-        required: true
+        required: false
       ACR_USERNAME:
         description: 'Azure Container Registry username (admin user)'
         required: true

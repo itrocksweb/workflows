@@ -107,15 +107,4 @@ jobs:
           # app-name: ${{ vars.APP_SERVICE_NAME }}
           slot-name: ${{ vars.APP_SERVICE_SLOT_NAME }}
           publish-profile: ${{ vars.APP_SERVICE_PUBLISH_PROFILE }}
-          images: ${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:latest
-
-      - name: Restart Azure Web App
-        run: |
-          # Save publish profile to a temporary file
-          echo "${{ vars.APP_SERVICE_PUBLISH_PROFILE }}" > publish-profile.xml
-          # Use the publish profile to restart the app
-          az webapp restart \
-            --name ${{ vars.APP_SERVICE_NAME }} \
-            --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --slot ${{ vars.APP_SERVICE_SLOT_NAME }} \
-            --publish-profile @publish-profile.xml
+          images: ${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:${{ github.run_number }}

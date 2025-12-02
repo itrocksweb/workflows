@@ -104,7 +104,7 @@ jobs:
       - name: Update Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          # app-name: ${{ vars.APP_SERVICE_NAME }}
+          app-name: ${{ vars.APP_SERVICE_NAME }}
           slot-name: ${{ vars.APP_SERVICE_SLOT_NAME }}
           publish-profile: ${{ vars.APP_SERVICE_PUBLISH_PROFILE }}
           images: ${{ vars.ACR_URL }}/${{ vars.ACR_REPOSITORY }}:${{ github.run_number }}

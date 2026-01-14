@@ -94,7 +94,7 @@ jobs:
           # Construct destination URL with SAS token
           DESTINATION_URL="${AZURE_STORAGE_BLOB_URL}/${{ vars.AZURE_STORAGE_CONTAINER }}${AZURE_STORAGE_SAS_TOKEN}"
 
-          echo "Destination URL:"
+          echo "Destination URL: (!!Important!! AZURE_STORAGE_SAS_TOKEN secret MUST contain initial Query string delimiter '?')"
           echo "${DESTINATION_URL}"
 
           # Upload files

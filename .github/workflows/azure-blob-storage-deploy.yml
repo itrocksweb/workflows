@@ -93,6 +93,9 @@ jobs:
           
           # Construct destination URL with SAS token
           DESTINATION_URL="${AZURE_STORAGE_BLOB_URL}/${{ vars.AZURE_STORAGE_CONTAINER }}${AZURE_STORAGE_SAS_TOKEN}"
-          
+
+          echo "Destination URL:"
+          echo "${DESTINATION_URL}"
+
           # Upload files
           azcopy copy "${{ inputs.SOURCE_PATH }}/*" "${DESTINATION_URL}" --recursive=true

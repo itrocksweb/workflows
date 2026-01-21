@@ -8,6 +8,11 @@ on:
         description: 'Environment'
         required: true
         type: string
+      FLAVOUR:
+        description: 'Country/Flavour (argentina, elsalvador, guatemala, honduras, panama, nicaragua). Leave empty to use APK_FLAVOUR variable.'
+        required: false
+        type: string
+        default: ''
     secrets:
       SIGNING_KEY_ALIAS:
         description: 'Signing key alias'
@@ -67,7 +72,7 @@ jobs:
       - name: Set capitalized flavor name
         id: set-flavor
         run: |
-          FLAVOR="${{ vars.APK_FLAVOUR }}"
+          FLAVOR="${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}"
           CAPITALIZED_FLAVOR="$(echo ${FLAVOR:0:1} | tr '[:lower:]' '[:upper:]')${FLAVOR:1}"
           echo "CAPITALIZED_FLAVOR=$CAPITALIZED_FLAVOR" >> $GITHUB_OUTPUT
           echo "Using flavor: $CAPITALIZED_FLAVOR"
@@ -94,8 +99,8 @@ jobs:
           mkdir -p artifacts-output
           
           # Find and copy APK and AAB
-          APK_PATH=$(find app/build/outputs/apk/${{ vars.APK_FLAVOUR }}/release -name '*.apk' | head -n 1)
-          AAB_PATH=$(find app/build/outputs/bundle/${{ vars.APK_FLAVOUR }}Release -name '*.aab' | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}/release -name '*.apk' | head -n 1)
+          AAB_PATH=$(find app/build/outputs/bundle/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}Release -name '*.aab' | head -n 1)
               
           if [ -z "$APK_PATH" ]; then
             echo "::error::No se encontró ningún APK generado"

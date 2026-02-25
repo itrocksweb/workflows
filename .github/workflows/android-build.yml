@@ -109,7 +109,7 @@ jobs:
           
           # Find and copy APK and AAB
           APK_PATH=$(find app/build/outputs/apk/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}/${{ inputs.BUILD_TYPE }} -name '*.apk' | head -n 1)
-          AAB_PATH=$(find app/build/outputs/bundle/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}/${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} -name '*.aab' | head -n 1)
+          AAB_PATH=$(find app/build/outputs/bundle/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} -name '*.aab' | head -n 1)
               
           if [ -z "$APK_PATH" ]; then
             echo "::error::No se encontró ningún APK generado"

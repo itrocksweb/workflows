@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: ''
+      BUILD_TYPE:
+        description: 'Build type to run. Leave empty to use default build type.'
+        required: false
+        type: string
+        default: 'release'
     secrets:
       SIGNING_KEY_ALIAS:
         description: 'Signing key alias'
@@ -69,16 +74,20 @@ jobs:
       - name: Clean build
         run: ./gradlew clean --no-daemon
         
-      - name: Set capitalized flavor name
+      - name: Set capitalized flavor name and build type
         id: set-flavor
         run: |
           FLAVOR="${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}"
           CAPITALIZED_FLAVOR="$(echo ${FLAVOR:0:1} | tr '[:lower:]' '[:upper:]')${FLAVOR:1}"
           echo "CAPITALIZED_FLAVOR=$CAPITALIZED_FLAVOR" >> $GITHUB_OUTPUT
           echo "Using flavor: $CAPITALIZED_FLAVOR"
+          BUILD_TYPE="${{ inputs.BUILD_TYPE != '' && inputs.BUILD_TYPE || 'release' }}"
+          CAPITALIZED_BUILD_TYPE="$(echo ${BUILD_TYPE:0:1} | tr '[:lower:]' '[:upper:]')${BUILD_TYPE:1}"
+          echo "CAPITALIZED_BUILD_TYPE=$CAPITALIZED_BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "Using build type: $CAPITALIZED_BUILD_TYPE"
       
       - name: Generate Safe Args
-        run: ./gradlew generateSafeArgs${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}Release --no-daemon
+        run: ./gradlew generateSafeArgs${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} --no-daemon
 
       - name: Build Signed APK & AAB
         env:
@@ -86,7 +95,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         run: |
-          ./gradlew assemble${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}Release bundle${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}Release \
+          ./gradlew assemble${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} bundle${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} \
             -Pandroid.injected.signing.store.file=$(pwd)/keystore/release.keystore \
             -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS \
@@ -99,8 +108,8 @@ jobs:
           mkdir -p artifacts-output
           
           # Find and copy APK and AAB
-          APK_PATH=$(find app/build/outputs/apk/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}/release -name '*.apk' | head -n 1)
-          AAB_PATH=$(find app/build/outputs/bundle/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}Release -name '*.aab' | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}/${{ inputs.BUILD_TYPE }} -name '*.apk' | head -n 1)
+          AAB_PATH=$(find app/build/outputs/bundle/${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}/${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} -name '*.aab' | head -n 1)
               
           if [ -z "$APK_PATH" ]; then
             echo "::error::No se encontró ningún APK generado"
@@ -129,7 +138,7 @@ jobs:
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ vars.APK_NAME }}-${{ inputs.ENVIRONMENT }}-Release-${{ github.run_number }}
+          name: ${{ vars.APK_NAME }}-${{ inputs.ENVIRONMENT }}-${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }}-${{ github.run_number }}
           path: ${{ steps.prepare-artifacts.outputs.apk_path }}
           retention-days: 90
           if-no-files-found: error
@@ -227,7 +236,7 @@ jobs:
       - name: Upload AAB as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ vars.APK_NAME }}-${{ inputs.ENVIRONMENT }}-Release-Bundle-${{ github.run_number }}
+          name: ${{ vars.APK_NAME }}-${{ inputs.ENVIRONMENT }}-${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }}-Bundle-${{ github.run_number }}
           path: ${{ steps.prepare-artifacts.outputs.aab_path }}
           retention-days: 90
           if-no-files-found: error

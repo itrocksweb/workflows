@@ -22,7 +22,7 @@ on:
         type: string
       NODE_VERSION:
         description: 'Node.js version'
-        required: true
+        required: false
         type: string
       DEPENDENCY_INSTALL_COMMAND:
         description: 'Dependency install command'
@@ -56,6 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js
+        if: ${{ inputs.NODE_VERSION != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.NODE_VERSION }}

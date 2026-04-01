@@ -22,7 +22,7 @@ on:
         type: string
       NODE_VERSION:
         description: 'Node.js version'
-        required: true
+        required: false
         type: string
       DEPENDENCY_INSTALL_COMMAND:
         description: 'Dependency install command'
@@ -56,6 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js
+        if: ${{ inputs.NODE_VERSION != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.NODE_VERSION }}
@@ -77,6 +78,7 @@ jobs:
           DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
         run: doppler secrets download --no-file --format env > .env
       - name: Install dependencies
+        if: ${{ inputs.DEPENDENCY_INSTALL_COMMAND != '' }}
         run: ${{ inputs.DEPENDENCY_INSTALL_COMMAND }}
       - name: Configure environment (if needed)
         if: ${{ inputs.MOVE_ANGULAR_ENV_FILE }}
@@ -85,6 +87,7 @@ jobs:
             mv src/environments/environment.${{ inputs.ENVIRONMENT }}.ts src/environments/environment.prod.ts
           fi
       - name: Build app
+        if: ${{ inputs.BUILD_COMMAND != '' }}
         run: ${{ inputs.BUILD_COMMAND }}
       - name: Deploy to S3
         run: |

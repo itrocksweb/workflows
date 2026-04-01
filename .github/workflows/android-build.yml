@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: 'release'
+      DOPPLER_DOWNLOAD_SECRETS:
+        description: 'Download country secrets from Doppler'
+        required: false
+        default: false
+        type: boolean
     secrets:
       SIGNING_KEY_ALIAS:
         description: 'Signing key alias'
@@ -31,6 +36,9 @@ on:
       KEYSTORE_BASE64:
         description: 'Keystore base64'
         required: true
+      DOPPLER_TOKEN:
+        description: 'Doppler token to fetch country secrets'
+        required: false
 
 jobs:
   android-build:
@@ -39,6 +47,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Doppler CLI
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        uses: dopplerhq/cli-action@v3
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -86,6 +98,22 @@ jobs:
           echo "CAPITALIZED_BUILD_TYPE=$CAPITALIZED_BUILD_TYPE" >> $GITHUB_OUTPUT
           echo "Using build type: $CAPITALIZED_BUILD_TYPE"
       
+      - name: Fetch country secrets from Doppler
+        if: ${{ inputs.DOPPLER_DOWNLOAD_SECRETS }}
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+        run: |
+          COUNTRY=$(echo "${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}" | tr '[:upper:]' '[:lower:]')
+          ENV=$(echo "${{ inputs.ENVIRONMENT }}" | tr '[:upper:]' '[:lower:]')
+          DOPPLER_CONFIG="${COUNTRY}_${ENV}"
+          mkdir -p secrets
+          doppler secrets download \
+            --project "$DOPPLER_PROJECT" \
+            --config "$DOPPLER_CONFIG" \
+            --no-file \
+            --format json > secrets/country_secrets.json
+
       - name: Generate Safe Args
         run: ./gradlew generateSafeArgs${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} --no-daemon
 

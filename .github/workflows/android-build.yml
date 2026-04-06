@@ -107,11 +107,17 @@ jobs:
           COUNTRY=$(echo "${{ inputs.FLAVOUR != '' && inputs.FLAVOUR || vars.APK_FLAVOUR }}" | tr '[:upper:]' '[:lower:]')
           DOPPLER_CONFIG="${COUNTRY}_${{ vars.DOPPLER_ENVIRONMENT }}"
           mkdir -p secrets
-          doppler secrets download \
+          SECRETS=$(doppler secrets download \
             --project "$DOPPLER_PROJECT" \
             --config "$DOPPLER_CONFIG" \
             --no-file \
-            --format json > secrets/country_secrets.json
+            --format json)
+          FLAVOR="${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }}"
+          jq -n \
+            --argjson s "$SECRETS" \
+            --arg country "$COUNTRY" \
+            --arg flavor "$FLAVOR" \
+            '{ ($country): { ($flavor): $s } }' > secrets/country_secrets.json
 
       - name: Generate Safe Args
         run: ./gradlew generateSafeArgs${{ steps.set-flavor.outputs.CAPITALIZED_FLAVOR }}${{ steps.set-flavor.outputs.CAPITALIZED_BUILD_TYPE }} --no-daemon

@@ -21,6 +21,11 @@ on:
         required: false
         default: false  
         type: boolean
+      DOPPLER_PROJECT:
+        description: 'To be used in case of Monorepos. Github env var must not be defined.'
+        required: false
+        default: ''  
+        type: string
       VERSION_VARIABLE_NAME:
         description: 'Version variable name'
         required: false
@@ -61,7 +66,7 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
-          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT || inputs.DOPPLER_PROJECT }}
         run: doppler secrets download --no-file --format env > .env
       - name: Add version to .env file
         run: |

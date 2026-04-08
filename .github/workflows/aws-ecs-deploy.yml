@@ -35,6 +35,16 @@ on:
         description: 'Docker build arguments (format: VAR=value)'
         required: false
         type: string
+      ECR_REPOSITORY:
+        description: 'ECR repository name (To be used in case of Monorepos.)'
+        required: false
+        default: ''
+        type: string
+      ECS_SERVICE_NAME:
+        description: 'ECS service name (To be used in case of Monorepos.)'
+        required: false
+        default: ''
+        type: string
     secrets:
       DOPPLER_TOKEN:
         description: 'Doppler token'
@@ -101,16 +111,16 @@ jobs:
           push: true
           tags: |
             ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:latest
-            ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:${{ github.run_number }}
+            ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY || inputs.ECR_REPOSITORY }}:${{ github.run_number }}
           build-args: |
             ${{ steps.build-args.outputs.args }}
           cache-from: |
-            type=registry,ref=${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:buildcache
+            type=registry,ref=${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY || inputs.ECR_REPOSITORY }}:buildcache
             type=gha,scope=${{ github.workflow }}
           cache-to: |
-            type=registry,ref=${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:buildcache,mode=max
+            type=registry,ref=${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY || inputs.ECR_REPOSITORY }}:buildcache,mode=max
             type=gha,scope=${{ github.workflow }},mode=max
           
       - name: Update ECS service
         run: |
-          aws ecs update-service --cluster ${{ vars.ECS_CLUSTER_NAME }} --service ${{ vars.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.AWS_REGION }}
+          aws ecs update-service --cluster ${{ vars.ECS_CLUSTER_NAME }} --service ${{ vars.ECS_SERVICE_NAME || inputs.ECS_SERVICE_NAME }} --force-new-deployment --region ${{ inputs.AWS_REGION }}

@@ -8,6 +8,11 @@ on:
         description: 'Environment'
         required: true
         type: string
+      DOPPLER_PROJECT:
+        description: 'To be used in case of Monorepos. Github env var must not be defined.'
+        required: false
+        default: ''  
+        type: string
     secrets:
       DOPPLER_TOKEN:
         required: true
@@ -20,6 +25,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Dump inputs
+        run: echo '${{ toJSON(inputs) }}'
 
       - name: Set up Doppler CLI
         uses: dopplerhq/cli-action@v3
@@ -27,7 +35,7 @@ jobs:
       - name: Validate Doppler env variables
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT }}
+          DOPPLER_PROJECT: ${{ vars.DOPPLER_PROJECT || inputs.DOPPLER_PROJECT }}
           DOPPLER_CONFIG: ${{ vars.DOPPLER_CONFIG }}
         run: |
           set -e

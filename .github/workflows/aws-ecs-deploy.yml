@@ -45,6 +45,11 @@ on:
         required: false
         default: ''
         type: string
+      DOCKERFILE_PATH:
+        description: 'Path to the Dockerfile relative to repo root (e.g. apps/my-service/Dockerfile)'
+        required: false
+        default: 'Dockerfile'
+        type: string
     secrets:
       DOPPLER_TOKEN:
         description: 'Doppler token'
@@ -108,6 +113,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ${{ inputs.DOCKERFILE_PATH }}
           push: true
           tags: |
             ${{ vars.ECR_URL }}/${{ vars.ECR_REPOSITORY }}:latest

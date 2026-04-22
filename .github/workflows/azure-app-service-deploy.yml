@@ -94,11 +94,19 @@ jobs:
         if: ${{ inputs.RESTART_AFTER_DEPLOY == true }}
         shell: bash
         run: |
-          if [ -z "${{ inputs.RESOURCE_GROUP }}" ]; then
-            echo "❌ RESOURCE_GROUP input is required when RESTART_AFTER_DEPLOY is true"
+          RESOURCE_GROUP="${{ inputs.resource_group }}"
+          
+          # Fallback to repository variable if input is not provided
+          if [ -z "$RESOURCE_GROUP" ]; then
+            RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP }}"
+          fi
+          
+          if [ -z "$RESOURCE_GROUP" ]; then
+            echo "❌ resource_group must be set either as input or as AZURE_RESOURCE_GROUP repository variable"
             exit 1
           fi
+          
           az webapp restart \
-            --resource-group ${{ inputs.RESOURCE_GROUP }} \
+            --resource-group "$RESOURCE_GROUP" \
             --name ${{ vars.AZURE_APP_NAME }} \
             --slot ${{ vars.AZURE_SLOT_NAME }}

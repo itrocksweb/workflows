@@ -27,6 +27,16 @@ on:
         required: false
         default: 'APP_VERSION'
         type: string
+      RESTART_AFTER_DEPLOY:
+        description: 'Restart App Service after deploy to sync all instances'
+        required: false
+        default: false
+        type: boolean
+      RESOURCE_GROUP:
+        description: 'Azure Resource Group (required if RESTART_AFTER_DEPLOY is true)'
+        required: false
+        default: ''
+        type: string
     secrets:
       AZURE_PUBLISH_PROFILE:
         description: 'Azure Web App publish profile'
@@ -79,3 +89,16 @@ jobs:
           slot-name: ${{ vars.AZURE_SLOT_NAME }}
           package: ${{env.DOTNET_ROOT}}/myapp
           publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+      
+      - name: Restart App Service to sync all instances
+        if: ${{ inputs.RESTART_AFTER_DEPLOY == true }}
+        shell: bash
+        run: |
+          if [ -z "${{ inputs.RESOURCE_GROUP }}" ]; then
+            echo "❌ RESOURCE_GROUP input is required when RESTART_AFTER_DEPLOY is true"
+            exit 1
+          fi
+          az webapp restart \
+            --resource-group ${{ inputs.RESOURCE_GROUP }} \
+            --name ${{ vars.AZURE_APP_NAME }} \
+            --slot ${{ vars.AZURE_SLOT_NAME }}

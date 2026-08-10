@@ -1,0 +1,87 @@
+name: AWS Bedrock KB Sync
+
+on:
+  workflow_call:
+    inputs:
+      AWS_ROLE_TO_ASSUME:
+        required: true
+        type: string
+      AWS_REGION:
+        required: true
+        type: string
+      DOCS_PATH:
+        required: true
+        type: string
+      S3_BUCKET:
+        required: true
+        type: string
+      S3_PREFIX:
+        required: false
+        type: string
+        default: ''
+      KNOWLEDGE_BASE_ID:
+        required: true
+        type: string
+      DATA_SOURCE_ID:
+        required: true
+        type: string
+      WAIT_FOR_COMPLETION:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  sync-and-ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.AWS_REGION }}
+
+      - name: Sync docs to S3
+        run: |
+          aws s3 sync "${{ inputs.DOCS_PATH }}" \
+            "s3://${{ inputs.S3_BUCKET }}/${{ inputs.S3_PREFIX }}" \
+            --delete
+
+      - name: Start Bedrock ingestion job
+        id: ingest
+        run: |
+          JOB_ID=$(aws bedrock-agent start-ingestion-job \
+            --knowledge-base-id "${{ inputs.KNOWLEDGE_BASE_ID }}" \
+            --data-source-id "${{ inputs.DATA_SOURCE_ID }}" \
+            --query 'ingestionJob.ingestionJobId' \
+            --output text)
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          echo "Ingestion job started: $JOB_ID"
+
+      - name: Wait for ingestion job to complete
+        if: ${{ inputs.WAIT_FOR_COMPLETION }}
+        run: |
+          JOB_ID="${{ steps.ingest.outputs.job_id }}"
+          STATUS="STARTING"
+          while [[ "$STATUS" == "STARTING" || "$STATUS" == "IN_PROGRESS" ]]; do
+            sleep 10
+            STATUS=$(aws bedrock-agent get-ingestion-job \
+              --knowledge-base-id "${{ inputs.KNOWLEDGE_BASE_ID }}" \
+              --data-source-id "${{ inputs.DATA_SOURCE_ID }}" \
+              --ingestion-job-id "$JOB_ID" \
+              --query 'ingestionJob.status' \
+              --output text)
+            echo "Estado actual: $STATUS"
+          done
+
+          if [[ "$STATUS" != "COMPLETE" ]]; then
+            echo "El ingestion job terminó con estado $STATUS"
+            exit 1
+          fi
+          echo "Ingestion job completado con éxito."

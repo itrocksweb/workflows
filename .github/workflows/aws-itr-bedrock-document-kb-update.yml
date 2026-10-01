@@ -37,6 +37,18 @@ jobs:
   sync-and-ingest:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate inputs
+        env:
+          S3_PREFIX: ${{ inputs.S3_PREFIX }}
+        run: |
+          # Trim whitespace and leading/trailing slashes
+          PREFIX="$(echo "$S3_PREFIX" | xargs | sed 's#^/*##; s#/*$##')"
+          if [[ -z "$PREFIX" ]]; then
+            echo "::error title=Missing S3_PREFIX::S3_PREFIX is required and cannot be empty or '/'. Aborting to avoid 'aws s3 sync --delete' on the bucket root."
+            exit 1
+          fi
+          echo "S3_PREFIX validated: $PREFIX"
+    
       - name: Checkout
         uses: actions/checkout@v4
 

@@ -16,9 +16,8 @@ on:
         required: true
         type: string
       S3_PREFIX:
-        required: false
+        required: true
         type: string
-        default: ''
       KNOWLEDGE_BASE_ID:
         required: true
         type: string
@@ -38,8 +37,26 @@ jobs:
   sync-and-ingest:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate inputs
+        env:
+          S3_PREFIX: ${{ inputs.S3_PREFIX }}
+        run: |
+          # Trim whitespace and leading/trailing slashes
+          PREFIX="$(echo "$S3_PREFIX" | xargs | sed 's#^/*##; s#/*$##')"
+          if [[ -z "$PREFIX" ]]; then
+            echo "::error title=Missing S3_PREFIX::S3_PREFIX is required and cannot be empty or '/'. Aborting to avoid 'aws s3 sync --delete' on the bucket root."
+            exit 1
+          fi
+          echo "S3_PREFIX validated: $PREFIX"
+    
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Debug OIDC token claims
+        run: |
+          curl -sSL "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            | jq -r '.value' | cut -d '.' -f2 | base64 -d 2>/dev/null | jq .
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

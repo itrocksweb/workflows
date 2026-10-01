@@ -16,9 +16,8 @@ on:
         required: true
         type: string
       S3_PREFIX:
-        required: false
+        required: true
         type: string
-        default: ''
       KNOWLEDGE_BASE_ID:
         required: true
         type: string
